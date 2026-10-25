@@ -1,0 +1,13 @@
+# Keeps the GitHub Actions versions (checkout, setup-node) and dev
+# dependencies up to date with small monthly PRs.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3

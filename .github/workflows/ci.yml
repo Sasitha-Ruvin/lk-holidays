@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+      # Make sure the published package works for both import styles
+      - name: Smoke test (CommonJS + ESM)
+        run: |
+          npm pack
+          mkdir /tmp/consumer && cd /tmp/consumer && npm init -y >/dev/null
+          npm install "$GITHUB_WORKSPACE"/lk-holidays-*.tgz
+          node -e "const h=require('lk-holidays'); if(!h.getAvailableYears().length) process.exit(1); console.log('CJS ok', h.getAvailableYears())"
+          node --input-type=module -e "import {isHoliday} from 'lk-holidays'; console.log('ESM ok', isHoliday('2027-04-14'))"

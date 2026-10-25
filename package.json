@@ -1,0 +1,73 @@
+{
+  "name": "lk-holidays",
+  "version": "1.0.0",
+  "description": "Sri Lankan public, bank and mercantile holidays from the Central Bank of Sri Lanka (CBSL), with English, Sinhala and Tamil names. Auto-updated every year. Zero dependencies, works offline.",
+  "keywords": [
+    "sri-lanka",
+    "srilanka",
+    "lanka",
+    "holidays",
+    "public-holidays",
+    "bank-holidays",
+    "mercantile-holidays",
+    "poya",
+    "cbsl",
+    "sinhala",
+    "tamil",
+    "calendar",
+    "attendance",
+    "working-days"
+  ],
+  "license": "MIT",
+  "author": "Sasitha Ruvin <sasitharuween@gmail.com>",
+  "homepage": "https://github.com/Sasitha-Ruvin/lk-holidays#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Sasitha-Ruvin/lk-holidays.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Sasitha-Ruvin/lk-holidays/issues"
+  },
+  "type": "module",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    },
+    "./data/*.json": "./data/*.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "data",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build:data": "tsx scripts/build-data.ts",
+    "build": "npm run build:data && tsc -p tsconfig.esm.json && tsc -p tsconfig.cjs.json && node scripts/postbuild.mjs",
+    "test": "npm run build:data && node --import tsx --test \"test/**/*.test.ts\"",
+    "typecheck": "npm run build:data && tsc -p tsconfig.json --noEmit",
+    "scrape": "tsx scripts/scrape.ts",
+    "import-text": "tsx scripts/import-text.ts",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.20.0",
+    "typescript": "^6.0.0"
+  }
+}

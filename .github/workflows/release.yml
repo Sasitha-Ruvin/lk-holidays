@@ -1,0 +1,217 @@
+name: Update holidays & publish
+
+on:
+  schedule:
+    # 08:47 Sri Lanka time (03:17 UTC) on the 1st and 15th of every month…
+    - cron: '17 3 1,15 * *'
+    # …plus every Monday from September to December, when CBSL usually
+    # publishes next year's list. More tries = a block on one day doesn't matter.
+    - cron: '17 3 * 9-12 1'
+  workflow_dispatch:
+    inputs:
+      years:
+        description: 'Years to scrape, space separated (empty = current + next year)'
+        required: false
+        default: ''
+      force_publish:
+        description: 'Bump patch version and publish even if data did not change'
+        type: boolean
+        default: false
+  push:
+    # Pushing a tag like v1.2.3 by hand publishes that version.
+    tags: ['v*']
+    # Adding/editing incoming/2028.txt on main imports that year.
+    branches: [main]
+    paths: ['incoming/**']
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  update:
+    name: Get CBSL data & commit changes
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    runs-on: ${{ vars.SCRAPER_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash # also works on a Windows self-hosted runner (Git Bash)
+    permissions:
+      contents: write # commit data + push tag
+    outputs:
+      version: ${{ steps.bump.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Import pasted tables (incoming/*.txt)
+        id: incoming
+        if: github.event_name == 'push'
+        run: |
+          shopt -s nullglob
+          files=(incoming/*.txt)
+          if [ ${#files[@]} -eq 0 ]; then echo "Nothing in incoming/"; exit 0; fi
+          years=()
+          for f in "${files[@]}"; do
+            y=$(basename "$f" .txt)
+            if ! [[ "$y" =~ ^[0-9]{4}$ ]]; then
+              echo "::error::$f must be named like incoming/2028.txt"; exit 1
+            fi
+            npm run import-text -- "$y" "$f"
+            git rm -q "$f"
+            years+=("$y")
+          done
+          echo "summary=manual import ${years[*]}" >> "$GITHUB_OUTPUT"
+
+      - name: Scrape cbsl.gov.lk
+        id: scrape
+        if: github.event_name != 'push'
+        env:
+          YEARS: ${{ inputs.years }}
+        run: |
+          if [ -n "$YEARS" ] && ! [[ "$YEARS" =~ ^[0-9]{4}( [0-9]{4})*$ ]]; then
+            echo "::error::years must look like '2027' or '2027 2028'"; exit 1
+          fi
+          npm run scrape -- $YEARS
+
+      - name: Did the data change?
+        id: diff
+        run: |
+          git add -A data incoming 2>/dev/null || git add -A data
+          if git diff --cached --quiet -- data; then echo "changed=false" >> "$GITHUB_OUTPUT"
+          else echo "changed=true" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Test the new data
+        if: steps.diff.outputs.changed == 'true' || inputs.force_publish
+        run: npm test
+
+      - name: Bump version, commit and tag
+        id: bump
+        if: steps.diff.outputs.changed == 'true' || inputs.force_publish
+        env:
+          SUMMARY: ${{ steps.scrape.outputs.summary || steps.incoming.outputs.summary }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # A brand-new year file = minor release; a correction = patch release
+          if git diff --cached --name-status -- data | grep -q '^A'; then BUMP=minor; else BUMP=patch; fi
+          VERSION=$(npm version "$BUMP" --no-git-tag-version | sed 's/^v//')
+
+          git add package.json package-lock.json
+          git commit -m "data: CBSL holidays update ($SUMMARY) — v$VERSION"
+          git tag "v$VERSION"
+          git push origin HEAD --follow-tags
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "### Released v$VERSION ($BUMP)" >> "$GITHUB_STEP_SUMMARY"
+          echo "$SUMMARY" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Clean up incoming/ when the data was already up to date
+        if: steps.incoming.outcome == 'success' && steps.diff.outputs.changed != 'true'
+        run: |
+          if ! git diff --cached --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "chore: remove processed incoming files (no data change)"
+            git push origin HEAD
+          fi
+
+  report-failure:
+    # Runs on GitHub's servers so it works even when the scraper ran on your
+    # computer (no GitHub CLI needed there).
+    name: Open an issue if the update failed
+    needs: update
+    if: failure()
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh label create scraper-failure --color B60205 --description "CBSL update failed" 2>/dev/null || true
+          EXISTING=$(gh issue list --label scraper-failure --state open --json number --jq '.[0].number')
+          BODY=$(cat <<EOF
+          The holiday update failed: $RUN_URL
+
+          **Most likely:** cbsl.gov.lk blocked GitHub's servers, was down, or changed its layout.
+          The schedule retries automatically, so a one-off block usually fixes itself.
+
+          **Fix it now from your phone or browser (2 minutes)**
+          1. Open https://www.cbsl.gov.lk/en/about/about-the-bank/bank-holidays-YYYY
+          2. Select the table and copy it
+          3. In this repo, click **Add file → Create new file**, name it \`incoming/YYYY.txt\`,
+             paste, and **Commit** to \`main\`
+          4. The workflow imports it, tests it and publishes a new npm version
+
+          **Stop it happening:** run the scraper on your own computer — see "Self-hosted runner" in SETUP.md.
+          EOF
+          )
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body "Failed again: $RUN_URL"
+          else
+            gh issue create --title "Holiday update failed" --label scraper-failure --body "$BODY"
+          fi
+
+  publish:
+    name: Publish to npm
+    needs: update
+    # Runs after a data change, a forced publish, or a manually pushed v* tag
+    if: >-
+      always() && (
+        startsWith(github.ref, 'refs/tags/') ||
+        (needs.update.result == 'success' && needs.update.outputs.version != '')
+      )
+    runs-on: ubuntu-latest # always GitHub's servers: npm Trusted Publishing requires it
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write # required for npm Trusted Publishing (OIDC) + provenance
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ startsWith(github.ref, 'refs/tags/') && github.ref || format('refs/tags/v{0}', needs.update.outputs.version) }}
+
+      # No registry-url here on purpose: setup-node would write an .npmrc
+      # with an empty token, which stops npm from using Trusted Publishing.
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - name: Use npm 11.5.1+ (needed for Trusted Publishing)
+        run: npm install -g npm@latest && npm --version
+
+      - name: Check tag matches package.json
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          PKG="v$(node -p "require('./package.json').version")"
+          [ "$PKG" = "$GITHUB_REF_NAME" ] || { echo "::error::Tag $GITHUB_REF_NAME != package.json $PKG"; exit 1; }
+
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+
+      - name: Publish
+        run: npm publish --access public
+
+  keepalive:
+    # GitHub disables scheduled workflows after 60 days without repo activity.
+    # Re-enabling the workflow through the API resets that timer.
+    name: Keep schedule alive
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/release.yml/enable"
