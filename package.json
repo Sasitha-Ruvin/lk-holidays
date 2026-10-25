@@ -1,6 +1,6 @@
 {
   "name": "lk-holidays",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Sri Lankan public, bank and mercantile holidays from the Central Bank of Sri Lanka (CBSL), with English, Sinhala and Tamil names. Auto-updated every year. Zero dependencies, works offline.",
   "keywords": [
     "sri-lanka",
