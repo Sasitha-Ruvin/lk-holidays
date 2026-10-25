@@ -27,7 +27,7 @@ interface PoyaMonth {
 
 const POYA_MONTHS: PoyaMonth[] = [
   { key: 'duruthu', en: 'Duruthu', si: 'දුරුතු', ta: 'துருத்து', aliases: ['duruthu', 'durutu'] },
-  { key: 'navam', en: 'Navam', si: 'නවම්', ta: 'நவம்', aliases: ['navam'] },
+    { key: 'navam', en: 'Navam', si: 'නවම්', ta: 'நவம்', aliases: ['navam', 'nawam'] },
   { key: 'medin', en: 'Medin', si: 'මැදින්', ta: 'மெதின்', aliases: ['medin', 'madin'] },
   { key: 'bak', en: 'Bak', si: 'බක්', ta: 'பக்', aliases: ['bak'] },
   { key: 'vesak', en: 'Vesak', si: 'වෙසක්', ta: 'வெசாக்', aliases: ['vesak', 'wesak'] },

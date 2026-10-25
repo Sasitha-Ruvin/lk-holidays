@@ -1,7 +1,7 @@
 # lk-holidays 🇱🇰
 
 [![npm version](https://img.shields.io/npm/v/lk-holidays.svg)](https://www.npmjs.com/package/lk-holidays)
-[![CI](https://github.com/YOUR_GITHUB_USERNAME/lk-holidays/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_GITHUB_USERNAME/lk-holidays/actions/workflows/ci.yml)
+[![CI](https://github.com/Sasitha-Ruvin/lk-holidays/actions/workflows/ci.yml/badge.svg)](https://github.com/Sasitha-Ruvin/lk-holidays/actions/workflows/ci.yml)
 [![license](https://img.shields.io/npm/l/lk-holidays.svg)](LICENSE)
 
 Sri Lankan **public, bank and mercantile holidays**, taken from the
