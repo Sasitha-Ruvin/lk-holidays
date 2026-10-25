@@ -771,7 +771,7 @@ About 15 kB compressed for all years, with no dependencies.
 ## Contributing
 
 ```bash
-git clone https://github.com/YOUR_GITHUB_USERNAME/lk-holidays.git
+git clone https://github.com/Sasitha-Ruvin/lk-holidays.git
 cd lk-holidays
 npm install
 npm test
